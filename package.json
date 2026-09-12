@@ -1,0 +1,14 @@
+{
+  "name": "bananasmp-afk-bot",
+  "version": "1.0.0",
+  "description": "ITZ_Khuzaima BananaSMP AFK Bot",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js"
+  },
+  "private": true,
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "mineflayer": "^4.31.0"
+  }
+}
