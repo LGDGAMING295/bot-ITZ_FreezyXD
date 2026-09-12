@@ -1,106 +1,73 @@
-```js
 require("dotenv").config();
 
 const mineflayer = require("mineflayer");
 
-const CONFIG = {
-    host: process.env.MC_HOST || "bananasmp.net",
-    port: Number(process.env.MC_PORT || 25565),
+const HOST = process.env.MC_HOST || "bananasmp.net";
+const PORT = Number(process.env.MC_PORT || 25565);
 
-    username: process.env.MC_USERNAME,
-    password: process.env.MC_PASSWORD,
+const USERNAME = process.env.MC_USERNAME;
+const PASSWORD = process.env.MC_PASSWORD;
 
-    loginDelay: Number(process.env.LOGIN_DELAY || 2500),
-    lobbyDelay: Number(process.env.LOBBY_DELAY || 2500),
-    reconnectDelay: Number(process.env.RECONNECT_DELAY || 5000)
-};
+const LOGIN_DELAY = Number(process.env.LOGIN_DELAY || 2500);
+const SERVER_DELAY = Number(process.env.LOBBY_DELAY || 2500);
+const RECONNECT_DELAY = Number(process.env.RECONNECT_DELAY || 5000);
 
 let bot = null;
 let reconnectTimer = null;
 
 let loginSent = false;
-let lifeStealSent = false;
-let lobbyHandled = false;
+let serverSent = false;
+let guiClosed = false;
 
 function log(message) {
-    console.log(`[${new Date().toISOString()}] ${message}`);
+    console.log("[" + new Date().toISOString() + "] " + message);
 }
 
-function createBot() {
-    if (!CONFIG.username || !CONFIG.password) {
-        log("ERROR: MC_USERNAME ya MC_PASSWORD missing hai.");
+function startBot() {
+    if (!USERNAME) {
+        log("ERROR: MC_USERNAME missing hai.");
         process.exit(1);
     }
 
-    log(`Connecting to ${CONFIG.host}:${CONFIG.port}...`);
+    if (!PASSWORD) {
+        log("ERROR: MC_PASSWORD missing hai.");
+        process.exit(1);
+    }
+
+    log("Connecting to " + HOST + ":" + PORT + "...");
 
     bot = mineflayer.createBot({
-        host: CONFIG.host,
-        port: CONFIG.port,
-        username: CONFIG.username,
-        auth: "offline",
-        version: false
+        host: HOST,
+        port: PORT,
+        username: USERNAME,
+
+        // /login servers ke liye
+        auth: "offline"
     });
 
     loginSent = false;
-    lifeStealSent = false;
-    lobbyHandled = false;
+    serverSent = false;
+    guiClosed = false;
 
-    setupEvents();
-}
-
-function setupEvents() {
-
-    // Server join hote hi pehle login
-    bot.once("spawn", () => {
+    // =========================
+    // JOIN / SPAWN
+    // =========================
+    bot.once("spawn", function () {
         log("Bot server par join ho gaya.");
 
-        setTimeout(() => {
+        setTimeout(function () {
             sendLogin();
-        }, CONFIG.loginDelay);
+        }, LOGIN_DELAY);
     });
 
-    // Login ke baad lobby GUI open hogi
-    bot.on("windowOpen", (window) => {
-
-        if (lobbyHandled) {
-            return;
-        }
-
-        lobbyHandled = true;
-
-        log(`Lobby GUI open hua: ${window.title}`);
-
-        // GUI ko ESC ke equivalent close karo
-        setTimeout(() => {
-
-            try {
-                if (bot.currentWindow) {
-                    bot.closeWindow(bot.currentWindow);
-                    log("Lobby GUI close kar diya.");
-                }
-
-                // GUI close hone ke baad LifeSteal join
-                setTimeout(() => {
-                    sendLifeSteal();
-                }, CONFIG.lobbyDelay);
-
-            } catch (error) {
-                log(`GUI close error: ${error.message}`);
-                lobbyHandled = false;
-            }
-
-        }, 1000);
-    });
-
-    // Server messages
-    bot.on("messagestr", (message) => {
-
-        log(`CHAT: ${message}`);
+    // =========================
+    // CHAT
+    // =========================
+    bot.on("messagestr", function (message) {
+        log("CHAT: " + message);
 
         const msg = message.toLowerCase();
 
-        // Agar login prompt aaye aur abhi login nahi hua
         if (
             !loginSent &&
             (
@@ -114,79 +81,129 @@ function setupEvents() {
         }
     });
 
-    bot.on("kicked", (reason) => {
-        log(`KICKED: ${reason}`);
+    // =========================
+    // LOBBY GUI
+    // =========================
+    bot.on("windowOpen", function () {
+        if (guiClosed) {
+            return;
+        }
+
+        log("Lobby GUI open hua.");
+
+        setTimeout(function () {
+            try {
+                if (bot.currentWindow) {
+                    bot.closeWindow(bot.currentWindow);
+                    log("Lobby GUI close kar diya.");
+                }
+
+                guiClosed = true;
+
+                setTimeout(function () {
+                    sendLifeSteal();
+                }, SERVER_DELAY);
+
+            } catch (error) {
+                log("GUI close error: " + error.message);
+            }
+        }, 1000);
     });
 
-    bot.on("error", (error) => {
-        log(`ERROR: ${error.message}`);
+    // =========================
+    // KICK
+    // =========================
+    bot.on("kicked", function (reason) {
+        log("KICKED: " + reason);
     });
 
-    bot.on("end", (reason) => {
+    // =========================
+    // ERROR
+    // =========================
+    bot.on("error", function (error) {
+        log("ERROR: " + error.message);
+    });
 
-        log(`Disconnected: ${reason || "unknown reason"}`);
+    // =========================
+    // DISCONNECT
+    // =========================
+    bot.on("end", function (reason) {
+        log("Disconnected: " + (reason || "unknown"));
 
         scheduleReconnect();
     });
 }
 
+// =========================
+// LOGIN
+// =========================
 function sendLogin() {
-
-    if (loginSent || !bot || !bot.entity) {
+    if (loginSent) {
         return;
     }
 
-    if (!CONFIG.password) {
-        log("ERROR: MC_PASSWORD missing hai.");
+    if (!bot || !bot.entity) {
         return;
     }
 
     loginSent = true;
 
-    log("Server login command bhej raha hoon...");
+    log("Login command bhej raha hoon...");
 
-    bot.chat(`/login ${CONFIG.password}`);
+    bot.chat("/login " + PASSWORD);
 
     log("Login command sent.");
 }
 
+// =========================
+// LIFESTEAL
+// =========================
 function sendLifeSteal() {
-
-    if (lifeStealSent || !bot || !bot.entity) {
+    if (serverSent) {
         return;
     }
 
-    lifeStealSent = true;
+    if (!bot || !bot.entity) {
+        return;
+    }
 
-    log("LifeSteal server join command bhej raha hoon...");
+    serverSent = true;
+
+    log("Lifesteal command bhej raha hoon...");
 
     bot.chat("/server lifesteal");
 
-    log("LifeSteal command sent.");
+    log("Lifesteal command sent.");
+
+    log("Bot ab Lifesteal server mein AFK rahega.");
 }
 
+// =========================
+// RECONNECT
+// =========================
 function scheduleReconnect() {
-
     if (reconnectTimer) {
         return;
     }
 
     log(
-        `Reconnect ${CONFIG.reconnectDelay / 1000} seconds mein hoga...`
+        "Reconnect " +
+        (RECONNECT_DELAY / 1000) +
+        " seconds baad hoga..."
     );
 
-    reconnectTimer = setTimeout(() => {
-
+    reconnectTimer = setTimeout(function () {
         reconnectTimer = null;
 
-        createBot();
-
-    }, CONFIG.reconnectDelay);
+        startBot();
+    }, RECONNECT_DELAY);
 }
 
+// =========================
+// SHUTDOWN
+// =========================
 function shutdown(signal) {
-
-    log(`${signal} received. Bot shutdown ho raha hai...`);
+    log(signal + " received. Bot shutdown ho raha hai...");
 
     if (reconnectTimer) {
         clearTimeout(reconnectTimer);
@@ -196,59 +213,25 @@ function shutdown(signal) {
     if (bot) {
         try {
             bot.quit("Bot shutting down");
-        } catch (_) {}
+        } catch (error) {
+            // ignore
+        }
     }
 
-    setTimeout(() => {
+    setTimeout(function () {
         process.exit(0);
     }, 1000);
 }
 
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", function () {
+    shutdown("SIGTERM");
+});
 
-createBot();
-```
+process.on("SIGINT", function () {
+    shutdown("SIGINT");
+});
 
-### `.env`
-
-Root folder mein `.env`:
-
-```env
-MC_USERNAME=ITZ_FreezyXD
-MC_PASSWORD=YOUR_SERVER_LOGIN_PASSWORD
-
-MC_HOST=bananasmp.net
-MC_PORT=25565
-
-LOGIN_DELAY=2500
-LOBBY_DELAY=2500
-RECONNECT_DELAY=5000
-```
-
-**Real password sirf `.env` mein rakho**, GitHub par nahi.
-
-Phir local test:
-
-```bash
-npm install
-npm start
-```
-
-Expected flow:
-
-```text
-JOIN
-↓
-/login password
-↓
-Lobby GUI
-↓
-GUI close
-↓
-/server lifesteal
-↓
-LifeSteal
-```
-
-Agar is baar bhi `SyntaxError` aaye, **terminal ka exact error paste kar dena**.
+// =========================
+// START
+// =========================
+startBot();
