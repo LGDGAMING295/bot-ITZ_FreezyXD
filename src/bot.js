@@ -4,7 +4,6 @@ const mineflayer = require("mineflayer");
 
 const HOST = process.env.MC_HOST || "bananasmp.net";
 const PORT = Number(process.env.MC_PORT || 25565);
-
 const USERNAME = process.env.MC_USERNAME;
 const PASSWORD = process.env.MC_PASSWORD;
 
@@ -40,8 +39,6 @@ function startBot() {
         host: HOST,
         port: PORT,
         username: USERNAME,
-
-        // /login servers ke liye
         auth: "offline"
     });
 
@@ -49,9 +46,6 @@ function startBot() {
     serverSent = false;
     guiClosed = false;
 
-    // =========================
-    // JOIN / SPAWN
-    // =========================
     bot.once("spawn", function () {
         log("Bot server par join ho gaya.");
 
@@ -60,30 +54,24 @@ function startBot() {
         }, LOGIN_DELAY);
     });
 
-    // =========================
-    // CHAT
-    // =========================
     bot.on("messagestr", function (message) {
         log("CHAT: " + message);
 
-        const msg = message.toLowerCase();
+        var msg = message.toLowerCase();
 
         if (
             !loginSent &&
             (
-                msg.includes("/login") ||
-                msg.includes("please login") ||
-                msg.includes("please log in") ||
-                msg.includes("password")
+                msg.indexOf("/login") !== -1 ||
+                msg.indexOf("please login") !== -1 ||
+                msg.indexOf("please log in") !== -1 ||
+                msg.indexOf("password") !== -1
             )
         ) {
             sendLogin();
         }
     });
 
-    // =========================
-    // LOBBY GUI
-    // =========================
     bot.on("windowOpen", function () {
         if (guiClosed) {
             return;
@@ -110,33 +98,20 @@ function startBot() {
         }, 1000);
     });
 
-    // =========================
-    // KICK
-    // =========================
     bot.on("kicked", function (reason) {
         log("KICKED: " + reason);
     });
 
-    // =========================
-    // ERROR
-    // =========================
     bot.on("error", function (error) {
         log("ERROR: " + error.message);
     });
 
-    // =========================
-    // DISCONNECT
-    // =========================
     bot.on("end", function (reason) {
         log("Disconnected: " + (reason || "unknown"));
-
         scheduleReconnect();
     });
 }
 
-// =========================
-// LOGIN
-// =========================
 function sendLogin() {
     if (loginSent) {
         return;
@@ -155,9 +130,6 @@ function sendLogin() {
     log("Login command sent.");
 }
 
-// =========================
-// LIFESTEAL
-// =========================
 function sendLifeSteal() {
     if (serverSent) {
         return;
@@ -174,13 +146,9 @@ function sendLifeSteal() {
     bot.chat("/server lifesteal");
 
     log("Lifesteal command sent.");
-
     log("Bot ab Lifesteal server mein AFK rahega.");
 }
 
-// =========================
-// RECONNECT
-// =========================
 function scheduleReconnect() {
     if (reconnectTimer) {
         return;
@@ -194,14 +162,10 @@ function scheduleReconnect() {
 
     reconnectTimer = setTimeout(function () {
         reconnectTimer = null;
-
         startBot();
     }, RECONNECT_DELAY);
 }
 
-// =========================
-// SHUTDOWN
-// =========================
 function shutdown(signal) {
     log(signal + " received. Bot shutdown ho raha hai...");
 
@@ -214,7 +178,6 @@ function shutdown(signal) {
         try {
             bot.quit("Bot shutting down");
         } catch (error) {
-            // ignore
         }
     }
 
@@ -231,7 +194,4 @@ process.on("SIGINT", function () {
     shutdown("SIGINT");
 });
 
-// =========================
-// START
-// =========================
 startBot();
