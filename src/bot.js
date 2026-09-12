@@ -20,13 +20,13 @@ let reconnectTimer = null;
 
 let loginSent = false;
 let lifeStealSent = false;
+let lobbyHandled = false;
 
 function log(message) {
     console.log(`[${new Date().toISOString()}] ${message}`);
 }
 
 function createBot() {
-
     if (!CONFIG.username || !CONFIG.password) {
         log("ERROR: MC_USERNAME ya MC_PASSWORD missing hai.");
         process.exit(1);
@@ -44,15 +44,15 @@ function createBot() {
 
     loginSent = false;
     lifeStealSent = false;
+    lobbyHandled = false;
 
     setupEvents();
 }
 
 function setupEvents() {
 
-    // Server join hote hi sabse pehle login
+    // Server join hote hi pehle login
     bot.once("spawn", () => {
-
         log("Bot server par join ho gaya.");
 
         setTimeout(() => {
@@ -60,39 +60,47 @@ function setupEvents() {
         }, CONFIG.loginDelay);
     });
 
-    // Login ke baad lobby GUI open hoga.
-    // GUI open hote hi usay close karke LifeSteal join karna.
+    // Login ke baad lobby GUI open hogi
     bot.on("windowOpen", (window) => {
+
+        if (lobbyHandled) {
+            return;
+        }
+
+        lobbyHandled = true;
 
         log(`Lobby GUI open hua: ${window.title}`);
 
+        // GUI ko ESC ke equivalent close karo
         setTimeout(() => {
 
             try {
-
                 if (bot.currentWindow) {
                     bot.closeWindow(bot.currentWindow);
                     log("Lobby GUI close kar diya.");
                 }
 
+                // GUI close hone ke baad LifeSteal join
                 setTimeout(() => {
                     sendLifeSteal();
                 }, CONFIG.lobbyDelay);
 
             } catch (error) {
                 log(`GUI close error: ${error.message}`);
+                lobbyHandled = false;
             }
 
         }, 1000);
     });
 
+    // Server messages
     bot.on("messagestr", (message) => {
 
         log(`CHAT: ${message}`);
 
         const msg = message.toLowerCase();
 
-        // Agar server login prompt bheje to login
+        // Agar login prompt aaye aur abhi login nahi hua
         if (
             !loginSent &&
             (
@@ -125,6 +133,11 @@ function setupEvents() {
 function sendLogin() {
 
     if (loginSent || !bot || !bot.entity) {
+        return;
+    }
+
+    if (!CONFIG.password) {
+        log("ERROR: MC_PASSWORD missing hai.");
         return;
     }
 
@@ -166,12 +179,6 @@ function scheduleReconnect() {
 
         reconnectTimer = null;
 
-        try {
-            if (bot) {
-                bot.removeAllListeners();
-            }
-        } catch (_) {}
-
         createBot();
 
     }, CONFIG.reconnectDelay);
@@ -205,7 +212,7 @@ createBot();
 
 ### `.env`
 
-Ismein **password source code mein mat daalna**:
+Root folder mein `.env`:
 
 ```env
 MC_USERNAME=ITZ_FreezyXD
@@ -219,42 +226,29 @@ LOBBY_DELAY=2500
 RECONNECT_DELAY=5000
 ```
 
-### Ab kya remove hua?
+**Real password sirf `.env` mein rakho**, GitHub par nahi.
 
-Purane code se ye sab **remove**:
+Phir local test:
 
-* `guiSlot: 12`
-* `clickLifeSteal()`
-* Red Dye check
-* Slot 12 checking
-* GUI ke andar item click
-
-Ab bot **slot ko touch nahi karega**.
-
-**Flow exactly:**
-
-```text
-bananasmp.net
-      ↓
-JOIN
-      ↓
-/login PASSWORD
-      ↓
-Lobby GUI
-      ↓
-GUI CLOSE (ESC equivalent)
-      ↓
-/server lifesteal
-      ↓
-LifeSteal
-      ↓
-AFK
-      ↓
-Disconnect
-      ↓
-5 sec wait
-      ↓
-Reconnect
+```bash
+npm install
+npm start
 ```
 
-**Ek important point:** `bot.closeWindow()` Mineflayer mein GUI close karta hai, jo is purpose ke liye ESC ke equivalent hai.
+Expected flow:
+
+```text
+JOIN
+↓
+/login password
+↓
+Lobby GUI
+↓
+GUI close
+↓
+/server lifesteal
+↓
+LifeSteal
+```
+
+Agar is baar bhi `SyntaxError` aaye, **terminal ka exact error paste kar dena**.
